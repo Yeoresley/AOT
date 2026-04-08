@@ -3,12 +3,14 @@ import { WorkOrderStatus } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { CreateWorkOrderDto } from './dto/create-work-order.dto';
 import { WorkOrderCostingService } from './services/work-order-costing.service';
+import { PlatformEventsService } from '../platform-events/platform-events.service';
 
 @Injectable()
 export class WorkOrdersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly costingService: WorkOrderCostingService,
+    private readonly platformEvents: PlatformEventsService,
   ) {}
 
   async create(dto: CreateWorkOrderDto) {
@@ -108,6 +110,8 @@ export class WorkOrdersService {
         update: { ...totals },
       }),
     ]);
+
+    await this.platformEvents.publish('WORK_ORDER_CLOSED', 'work_order', workOrderId, { totals, closedBy });
 
     return { status: 'closed', totals };
   }

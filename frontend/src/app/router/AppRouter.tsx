@@ -5,6 +5,13 @@ import { DashboardPage } from '../../features/dashboard/DashboardPage';
 import { WorkOrdersPage } from '../../features/work-orders/WorkOrdersPage';
 import { ClientsPage } from '../../features/masters/ClientsPage';
 import { ReportsPage } from '../../features/reports/ReportsPage';
+import { InventoryPage } from '../../features/inventory/InventoryPage';
+import { PurchasingPage } from '../../features/purchasing/PurchasingPage';
+import { BillingPage } from '../../features/billing/BillingPage';
+import { ReceivablesPage } from '../../features/receivables/ReceivablesPage';
+import { ApprovalsPage } from '../../features/approvals/ApprovalsPage';
+import { AnalyticsPage } from '../../features/analytics/AnalyticsPage';
+import { ExternalPortalPage } from '../../features/external-portal/ExternalPortalPage';
 
 const isAuthenticated = true;
 
@@ -28,6 +35,13 @@ export function AppRouter() {
         <Route index element={<DashboardPage />} />
         <Route path="work-orders" element={<WorkOrdersPage />} />
         <Route path="masters/clients" element={<ClientsPage />} />
+        <Route path="inventory" element={<InventoryPage />} />
+        <Route path="purchasing" element={<PurchasingPage />} />
+        <Route path="billing" element={<BillingPage />} />
+        <Route path="receivables" element={<ReceivablesPage />} />
+        <Route path="approvals" element={<ApprovalsPage />} />
+        <Route path="analytics" element={<AnalyticsPage />} />
+        <Route path="external-portal" element={<ExternalPortalPage />} />
         <Route path="reports" element={<ReportsPage />} />
       </Route>
     </Routes>

@@ -181,6 +181,7 @@ model WorkOrder {
   outsourcedServices        OutsourcedServiceEntry[]
   statusHistory             WorkOrderStatusHistory[]
   costSummary               WorkOrderCostSummary?
+  invoices                 Invoice[]
   establishment             Establishment             @relation(fields: [establishmentId], references: [id])
   client                    Client                    @relation(fields: [clientId], references: [id])
   vehicle                   Vehicle                   @relation(fields: [vehicleId], references: [id])
@@ -331,4 +332,104 @@ model AuditLog {
   user       User?    @relation(fields: [userId], references: [id])
 
   @@index([entity, createdAt])
+}
+
+model DomainEventOutbox {
+  id            String   @id @default(cuid())
+  eventType     String
+  aggregateType String
+  aggregateId   String
+  payload       Json
+  status        String   @default("PENDING")
+  createdAt     DateTime @default(now())
+  processedAt   DateTime?
+
+  @@index([status, createdAt])
+}
+
+model InventoryItem {
+  id             String   @id @default(cuid())
+  sku            String   @unique
+  description    String
+  unitMeasure    String
+  stockOnHand    Decimal  @db.Decimal(14, 3)
+  minStock       Decimal  @db.Decimal(14, 3)
+  maxStock       Decimal? @db.Decimal(14, 3)
+  warehouseId    String?
+  averageCostUsd Decimal  @db.Decimal(14, 4)
+  averageCostCup Decimal  @db.Decimal(14, 4)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model PurchaseOrder {
+  id            String   @id @default(cuid())
+  poNumber      String   @unique
+  supplierName  String
+  status        String
+  orderDate     DateTime
+  currency      Currency
+  totalAmount   Decimal  @db.Decimal(14, 4)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Invoice {
+  id              String   @id @default(cuid())
+  invoiceNumber   String   @unique
+  workOrderId     String
+  issueDate       DateTime
+  dueDate         DateTime?
+  status          String
+  subtotalUsd     Decimal  @db.Decimal(14, 4)
+  subtotalCup     Decimal  @db.Decimal(14, 4)
+  totalUsd        Decimal  @db.Decimal(14, 4)
+  totalCup        Decimal  @db.Decimal(14, 4)
+  workOrder       WorkOrder @relation(fields: [workOrderId], references: [id])
+  receivableItems ReceivableItem[]
+  createdAt       DateTime @default(now())
+}
+
+model ReceivableItem {
+  id             String   @id @default(cuid())
+  invoiceId      String
+  dueDate        DateTime
+  amountUsd      Decimal  @db.Decimal(14, 4)
+  amountCup      Decimal  @db.Decimal(14, 4)
+  paidUsd        Decimal  @db.Decimal(14, 4)
+  paidCup        Decimal  @db.Decimal(14, 4)
+  status         String
+  invoice        Invoice  @relation(fields: [invoiceId], references: [id])
+  createdAt      DateTime @default(now())
+}
+
+model ApprovalFlow {
+  id             String   @id @default(cuid())
+  flowCode       String   @unique
+  flowName       String
+  targetEntity   String
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  levels         ApprovalLevel[]
+}
+
+model ApprovalLevel {
+  id              String   @id @default(cuid())
+  approvalFlowId  String
+  levelOrder      Int
+  roleCode        String
+  required        Boolean  @default(true)
+  approvalFlow    ApprovalFlow @relation(fields: [approvalFlowId], references: [id])
+
+  @@unique([approvalFlowId, levelOrder])
+}
+
+model ExternalPortalUser {
+  id             String   @id @default(cuid())
+  clientId       String
+  email          String   @unique
+  passwordHash   String
+  isActive       Boolean  @default(true)
+  lastLoginAt    DateTime?
+  createdAt      DateTime @default(now())
 }

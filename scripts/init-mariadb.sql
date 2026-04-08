@@ -132,3 +132,99 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_audit_entity_created_at (entity, created_at)
 );
+
+CREATE TABLE IF NOT EXISTS domain_event_outbox (
+  id VARCHAR(191) PRIMARY KEY,
+  event_type VARCHAR(120) NOT NULL,
+  aggregate_type VARCHAR(80) NOT NULL,
+  aggregate_id VARCHAR(191) NOT NULL,
+  payload JSON NOT NULL,
+  status VARCHAR(32) NOT NULL DEFAULT 'PENDING',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  processed_at DATETIME NULL,
+  INDEX idx_outbox_status_created_at (status, created_at)
+);
+
+CREATE TABLE IF NOT EXISTS inventory_items (
+  id VARCHAR(191) PRIMARY KEY,
+  sku VARCHAR(80) NOT NULL UNIQUE,
+  description VARCHAR(255) NOT NULL,
+  unit_measure VARCHAR(40) NOT NULL,
+  stock_on_hand DECIMAL(14,3) NOT NULL,
+  min_stock DECIMAL(14,3) NOT NULL,
+  max_stock DECIMAL(14,3) NULL,
+  average_cost_usd DECIMAL(14,4) NOT NULL,
+  average_cost_cup DECIMAL(14,4) NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS purchase_orders (
+  id VARCHAR(191) PRIMARY KEY,
+  po_number VARCHAR(80) NOT NULL UNIQUE,
+  supplier_name VARCHAR(180) NOT NULL,
+  status VARCHAR(40) NOT NULL,
+  order_date DATETIME NOT NULL,
+  currency ENUM('USD','CUP') NOT NULL,
+  total_amount DECIMAL(14,4) NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS invoices (
+  id VARCHAR(191) PRIMARY KEY,
+  invoice_number VARCHAR(80) NOT NULL UNIQUE,
+  work_order_id VARCHAR(191) NOT NULL,
+  issue_date DATETIME NOT NULL,
+  due_date DATETIME NULL,
+  status VARCHAR(40) NOT NULL,
+  subtotal_usd DECIMAL(14,4) NOT NULL,
+  subtotal_cup DECIMAL(14,4) NOT NULL,
+  total_usd DECIMAL(14,4) NOT NULL,
+  total_cup DECIMAL(14,4) NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_invoices_work_order FOREIGN KEY (work_order_id) REFERENCES work_orders(id)
+);
+
+CREATE TABLE IF NOT EXISTS receivable_items (
+  id VARCHAR(191) PRIMARY KEY,
+  invoice_id VARCHAR(191) NOT NULL,
+  due_date DATETIME NOT NULL,
+  amount_usd DECIMAL(14,4) NOT NULL,
+  amount_cup DECIMAL(14,4) NOT NULL,
+  paid_usd DECIMAL(14,4) NOT NULL,
+  paid_cup DECIMAL(14,4) NOT NULL,
+  status VARCHAR(40) NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_receivable_items_invoice FOREIGN KEY (invoice_id) REFERENCES invoices(id)
+);
+
+CREATE TABLE IF NOT EXISTS approval_flows (
+  id VARCHAR(191) PRIMARY KEY,
+  flow_code VARCHAR(80) NOT NULL UNIQUE,
+  flow_name VARCHAR(180) NOT NULL,
+  target_entity VARCHAR(80) NOT NULL,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS approval_levels (
+  id VARCHAR(191) PRIMARY KEY,
+  approval_flow_id VARCHAR(191) NOT NULL,
+  level_order INT NOT NULL,
+  role_code VARCHAR(80) NOT NULL,
+  required TINYINT(1) NOT NULL DEFAULT 1,
+  CONSTRAINT uq_approval_level_order UNIQUE (approval_flow_id, level_order),
+  CONSTRAINT fk_approval_levels_flow FOREIGN KEY (approval_flow_id) REFERENCES approval_flows(id)
+);
+
+CREATE TABLE IF NOT EXISTS external_portal_users (
+  id VARCHAR(191) PRIMARY KEY,
+  client_id VARCHAR(191) NOT NULL,
+  email VARCHAR(180) NOT NULL UNIQUE,
+  password_hash VARCHAR(255) NOT NULL,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  last_login_at DATETIME NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_external_portal_client (client_id)
+);

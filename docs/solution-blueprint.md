@@ -323,3 +323,31 @@ Incluye:
 6. Multi-tenant por establecimiento/empresa.
 7. Integración con inventario/compras/facturación electrónica.
 8. Portal de consulta externa con permisos acotados.
+
+---
+
+# Anexo A) Estrategia de evolución por dominios (fase 2+)
+
+Para soportar crecimiento sin romper el núcleo transaccional de OT, se agrega una estrategia de **bounded contexts**:
+
+1. **Core Workshop:** órdenes, operaciones, insumos, PPA, subcontratados, costeo.
+2. **Inventory:** stock, reservas por OT, transferencias y kardex.
+3. **Purchasing:** solicitudes, órdenes de compra, recepción y conciliación.
+4. **Billing:** emisión de factura, notas de crédito, estado fiscal.
+5. **Receivables:** cartera, cobro, aging y conciliación de pagos.
+6. **Approvals:** motor de flujos multi-nivel por tipo de documento.
+7. **Analytics:** KPIs gerenciales, cubos y forecasting.
+8. **External Portal:** consulta externa segura por cliente/unidad.
+
+## Contratos de integración
+
+- Evento de dominio principal inicial: `WORK_ORDER_CLOSED`.
+- Publicación en outbox transaccional para integración desacoplada.
+- Consumidores futuros: facturación, cuentas por cobrar, analytics y portal externo.
+
+## Principios de evolución
+
+- No acoplar UI o reportes al esquema interno sin capa API.
+- Mantener snapshots contables inmutables en cierre de OT.
+- Versionar reglas de cálculo y políticas de aprobación por vigencia.
+- Incorporar colas/event broker sin romper contrato REST existente.
