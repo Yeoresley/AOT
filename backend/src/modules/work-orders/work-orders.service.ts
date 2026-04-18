@@ -4,8 +4,6 @@ import {
   WorkOrderOperationWorker,
   WorkOrderOperationTool,
   OutsourcedServiceEntry,
-  ConsumableEntry,
-  PpaEntry,
 } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { CreateWorkOrderDto } from './dto/create-work-order.dto';
@@ -88,17 +86,17 @@ export class WorkOrdersService {
     );
 
     const consumablesUsd = workOrder.consumables.reduce(
-      (acc: number, consumable: ConsumableEntry): number => acc + Number(consumable.costUsd),
+      (acc: number, consumable: { costUsd: unknown }): number => acc + Number(consumable.costUsd),
       0,
     );
 
     const consumablesCup = workOrder.consumables.reduce(
-      (acc: number, consumable: ConsumableEntry): number => acc + Number(consumable.costCup),
+      (acc: number, consumable: { costCup: unknown }): number => acc + Number(consumable.costCup),
       0,
     );
 
-    const ppaUsd = workOrder.ppas.reduce((acc: number, ppa: PpaEntry): number => acc + Number(ppa.costUsd), 0);
-    const ppaCup = workOrder.ppas.reduce((acc: number, ppa: PpaEntry): number => acc + Number(ppa.costCup), 0);
+    const ppaUsd = workOrder.ppas.reduce((acc: number, ppa: { costUsd: unknown }): number => acc + Number(ppa.costUsd), 0);
+    const ppaCup = workOrder.ppas.reduce((acc: number, ppa: { costCup: unknown }): number => acc + Number(ppa.costCup), 0);
 
     return this.costingService.calculate({
       salaryUsdBase,
