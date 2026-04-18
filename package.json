@@ -1,0 +1,15 @@
+{
+  "name": "rapitrans-workshop-monorepo",
+  "private": true,
+  "scripts": {
+    "seed": "ts-node prisma/seed.ts"
+  },
+  "devDependencies": {
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.4"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.18.0",
+    "bcryptjs": "^2.4.3"
+  }
+}
