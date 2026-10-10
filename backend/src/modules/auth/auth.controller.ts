@@ -1,13 +1,22 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
-import { IsString } from 'class-validator';
+import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
+import { IsNotEmpty, IsString } from 'class-validator';
 import { AuthService } from './auth.service';
+import { JwtAuthGuard, AuthenticatedRequest } from './jwt-auth.guard';
 
 class LoginDto {
   @IsString()
+  @IsNotEmpty()
   username!: string;
 
   @IsString()
+  @IsNotEmpty()
   password!: string;
+}
+
+class RefreshDto {
+  @IsString()
+  @IsNotEmpty()
+  refreshToken!: string;
 }
 
 @Controller('auth')
@@ -20,17 +29,19 @@ export class AuthController {
   }
 
   @Post('refresh')
-  refresh(@Body() body: { refreshToken: string }) {
-    return this.authService.refresh(body.refreshToken);
+  refresh(@Body() dto: RefreshDto) {
+    return this.authService.refresh(dto.refreshToken);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Post('logout')
-  logout(@Body() body: { userId: string }) {
-    return this.authService.logout(body.userId);
+  logout(@Req() request: AuthenticatedRequest) {
+    return this.authService.logout(request.user.sub);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Get('me')
-  me() {
-    return { message: 'Implement with JwtAuthGuard to return profile' };
+  me(@Req() request: AuthenticatedRequest) {
+    return this.authService.getProfile(request.user.sub);
   }
 }

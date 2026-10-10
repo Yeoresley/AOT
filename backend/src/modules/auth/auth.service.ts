@@ -1,4 +1,5 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../../database/prisma.service';
 import * as bcrypt from 'bcryptjs';
@@ -8,11 +9,12 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
+    private readonly config: ConfigService,
   ) {}
 
   async login(username: string, password: string) {
     const user = await this.prisma.user.findUnique({ where: { username }, include: { roles: true } });
-    if (!user) throw new UnauthorizedException('Credenciales inválidas');
+    if (!user || !user.isActive) throw new UnauthorizedException('Credenciales inválidas');
 
     const valid = await bcrypt.compare(password, user.passwordHash);
     if (!valid) throw new UnauthorizedException('Credenciales inválidas');
@@ -20,7 +22,7 @@ export class AuthService {
     const payload = { sub: user.id, username: user.username };
     const accessToken = this.jwtService.sign(payload);
     const refreshToken = this.jwtService.sign(payload, {
-      secret: process.env.JWT_REFRESH_SECRET || 'dev_refresh_secret',
+      secret: this.refreshSecret,
       expiresIn: '7d',
     });
 
@@ -38,26 +40,51 @@ export class AuthService {
       },
     });
 
-    return { accessToken, refreshToken };
+    return {
+      accessToken,
+      refreshToken,
+      user: { id: user.id, username: user.username, fullName: user.fullName },
+    };
   }
 
   async refresh(refreshToken: string) {
-    const payload = this.jwtService.verify(refreshToken, {
-      secret: process.env.JWT_REFRESH_SECRET || 'dev_refresh_secret',
-    });
+    let payload: { sub: string; username: string };
+    try {
+      payload = this.jwtService.verify(refreshToken, { secret: this.refreshSecret });
+    } catch {
+      throw new UnauthorizedException('Sesión inválida');
+    }
 
     const record = await this.prisma.refreshToken.findUnique({ where: { userId: payload.sub } });
-    if (!record) throw new UnauthorizedException('Sesión inválida');
+    if (!record || record.expiresAt <= new Date()) throw new UnauthorizedException('Sesión inválida');
 
     const valid = await bcrypt.compare(refreshToken, record.tokenHash);
     if (!valid) throw new UnauthorizedException('Sesión inválida');
 
-    const accessToken = this.jwtService.sign({ sub: payload.sub, username: payload.username });
-    return { accessToken };
+    const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
+    if (!user || !user.isActive) throw new UnauthorizedException('Sesión inválida');
+    const accessToken = this.jwtService.sign({ sub: user.id, username: user.username });
+    return { accessToken, user: { id: user.id, username: user.username, fullName: user.fullName } };
+  }
+
+  async getProfile(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, username: true, fullName: true, isActive: true },
+    });
+    if (!user || !user.isActive) throw new UnauthorizedException('Sesión inválida');
+    return user;
   }
 
   async logout(userId: string) {
     await this.prisma.refreshToken.deleteMany({ where: { userId } });
     return { success: true };
+  }
+
+  private get refreshSecret() {
+    const secret = this.config.get<string>('JWT_REFRESH_SECRET') ??
+      (this.config.get<string>('NODE_ENV') === 'production' ? undefined : 'dev_refresh_secret');
+    if (!secret) throw new Error('JWT_REFRESH_SECRET debe configurarse en producción');
+    return secret;
   }
 }
