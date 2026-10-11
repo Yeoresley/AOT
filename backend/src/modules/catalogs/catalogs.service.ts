@@ -1,12 +1,14 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InventoryMovementType, Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import {
   InventoryItemDto,
   InventoryMovementDto,
+  ClientDto,
   MachineToolDto,
   OperationCatalogDto,
   OperatorDto,
+  VehicleDto,
   WarehouseDto,
 } from './catalogs.dto';
 
@@ -17,7 +19,9 @@ export class CatalogsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async list() {
-    const [operators, machineTools, operations, inventoryItems, warehouses] = await Promise.all([
+    const [clients, vehicles, operators, machineTools, operations, inventoryItems, warehouses] = await Promise.all([
+      this.prisma.client.findMany({ where: { deletedAt: null }, orderBy: { name: 'asc' } }),
+      this.prisma.vehicle.findMany({ orderBy: { plate: 'asc' } }),
       this.prisma.operator.findMany({ where: { deletedAt: null }, orderBy: { fullName: 'asc' } }),
       this.prisma.machineTool.findMany({ where: { deletedAt: null }, orderBy: { description: 'asc' } }),
       this.prisma.operationCatalog.findMany({ where: { deletedAt: null }, orderBy: { description: 'asc' } }),
@@ -42,6 +46,8 @@ export class CatalogsService {
       }),
     ]);
     return {
+      clients,
+      vehicles,
       operators,
       machineTools: machineTools.map((tool) => ({
         ...tool,
@@ -53,6 +59,32 @@ export class CatalogsService {
       inventoryItems,
       warehouses,
     };
+  }
+
+  createClient(dto: ClientDto) {
+    return this.prisma.client.create({
+      data: {
+        name: dto.name.trim(),
+        marginUsdPct: dto.marginUsdPct,
+        marginCupPct: dto.marginCupPct,
+      },
+    });
+  }
+
+  createVehicle(dto: VehicleDto) {
+    const plate = dto.plate.trim().toUpperCase();
+    return this.prisma.vehicle.findUnique({ where: { plate } }).then((existing) => {
+      if (existing) throw new ConflictException('Ya existe un vehículo con esa matrícula');
+      return this.prisma.vehicle.create({
+        data: {
+          plate,
+          brand: dto.brand.trim(),
+          model: dto.model.trim(),
+          year: dto.year,
+          vin: dto.vin?.trim() || null,
+        },
+      });
+    });
   }
 
   createOperator(dto: OperatorDto) {

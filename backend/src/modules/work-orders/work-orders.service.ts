@@ -9,6 +9,7 @@ import {
 import { PrismaService } from '../../database/prisma.service';
 import { CreateWorkOrderDto } from './dto/create-work-order.dto';
 import { AddWorkOrderOperationDto } from './dto/add-work-order-operation.dto';
+import { CloseWorkOrderDto } from './dto/close-work-order.dto';
 import { WorkOrderCostingService } from './services/work-order-costing.service';
 
 @Injectable()
@@ -336,7 +337,7 @@ export class WorkOrdersService {
     });
   }
 
-  async close(workOrderId: string, closedBy: string) {
+  async close(workOrderId: string, closedBy: string, dto: CloseWorkOrderDto) {
     const workOrder = await this.prisma.workOrder.findUnique({
       where: { id: workOrderId },
       select: { id: true, status: true, _count: { select: { operations: true } } },
@@ -353,7 +354,12 @@ export class WorkOrdersService {
     await this.prisma.$transaction([
       this.prisma.workOrder.update({
         where: { id: workOrderId },
-        data: { status: WorkOrderStatus.CLOSED, closedAt: new Date() },
+        data: {
+          status: WorkOrderStatus.CLOSED,
+          closedAt: new Date(),
+          releasedTo: dto.releasedTo.trim(),
+          deliveryNotes: dto.deliveryNotes?.trim() || null,
+        },
       }),
       this.prisma.workOrderStatusHistory.create({
         data: {

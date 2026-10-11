@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { CreateWorkOrderDto } from './dto/create-work-order.dto';
 import { AddWorkOrderOperationDto } from './dto/add-work-order-operation.dto';
+import { CloseWorkOrderDto } from './dto/close-work-order.dto';
 import { WorkOrdersService } from './work-orders.service';
 import { AuthenticatedRequest, JwtAuthGuard } from '../auth/jwt-auth.guard';
 
@@ -35,7 +36,7 @@ export class WorkOrdersController {
   }
 
   @Post(':id/close')
-  close(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
-    return this.service.close(id, request.user.username);
+  close(@Param('id') id: string, @Body() dto: CloseWorkOrderDto, @Req() request: AuthenticatedRequest) {
+    return this.service.close(id, request.user.username, dto);
   }
 }

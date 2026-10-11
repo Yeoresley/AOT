@@ -6,7 +6,11 @@ interface WorkOrder {
   folio: string;
   status: string;
   receivedAt: string;
+  deliveredBy: string;
   requestedActivity: string;
+  closedAt?: string | null;
+  releasedTo?: string | null;
+  deliveryNotes?: string | null;
   client: { name: string };
   vehicle: { plate: string; brand: string; model: string };
   establishment: { name: string };
@@ -120,6 +124,9 @@ export function WorkOrdersPage() {
   const [error, setError] = useState('');
   const [preview, setPreview] = useState<{ folio: string; totals: CostPreview } | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<WorkOrder | null>(null);
+  const [closingOrder, setClosingOrder] = useState<WorkOrder | null>(null);
+  const [releaseForm, setReleaseForm] = useState({ releasedTo: '', deliveryNotes: '' });
+  const [closing, setClosing] = useState(false);
   const [workers, setWorkers] = useState<WorkerInput[]>([]);
   const [tools, setTools] = useState<ToolInput[]>([]);
   const [consumables, setConsumables] = useState<ConsumableInput[]>([]);
@@ -247,15 +254,22 @@ export function WorkOrdersPage() {
     }
   }
 
-  async function closeOrder(order: WorkOrder) {
-    if (!window.confirm(`¿Cerrar la orden ${order.folio}?`)) return;
+  async function closeOrder(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!closingOrder) return;
+    if (!window.confirm(`¿Confirmas la salida del vehículo y el cierre de ${closingOrder.folio}?`)) return;
     setError('');
+    setClosing(true);
     try {
-      await http.post(`/work-orders/${order.id}/close`);
+      await http.post(`/work-orders/${closingOrder.id}/close`, releaseForm);
       await loadOrders();
       setPreview(null);
+      setClosingOrder(null);
+      setReleaseForm({ releasedTo: '', deliveryNotes: '' });
     } catch {
-      setError(`No se pudo cerrar la orden ${order.folio}.`);
+      setError(`No se pudo registrar la salida de ${closingOrder.folio}. Comprueba los datos e inténtalo de nuevo.`);
+    } finally {
+      setClosing(false);
     }
   }
 
@@ -511,6 +525,25 @@ export function WorkOrdersPage() {
         </form>
       )}
 
+      {closingOrder && (
+        <form onSubmit={closeOrder} className="rounded-xl border border-green-300 bg-green-50 p-5">
+          <h3 className="text-lg font-semibold">Registrar salida del vehículo · {closingOrder.folio}</h3>
+          <p className="mt-1 text-sm text-slate-600">Confirma quién recibe el vehículo. Al cerrar se congela el costo de la orden y queda lista para facturar.</p>
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <label className="text-sm font-medium">Entregado a
+              <input required autoFocus value={releaseForm.releasedTo} onChange={(event) => setReleaseForm((current) => ({ ...current, releasedTo: event.target.value }))} className={`${fieldClass} mt-1 font-normal`} />
+            </label>
+            <label className="text-sm font-medium">Nota de entrega (opcional)
+              <input value={releaseForm.deliveryNotes} onChange={(event) => setReleaseForm((current) => ({ ...current, deliveryNotes: event.target.value }))} className={`${fieldClass} mt-1 font-normal`} />
+            </label>
+          </div>
+          <div className="mt-4 flex gap-3">
+            <button disabled={closing} className="rounded-lg bg-green-800 px-4 py-2 text-white disabled:opacity-60">{closing ? 'Cerrando...' : 'Confirmar salida y cerrar orden'}</button>
+            <button type="button" onClick={() => setClosingOrder(null)} className="rounded-lg border px-4 py-2">Cancelar</button>
+          </div>
+        </form>
+      )}
+
       <div className="overflow-hidden rounded-xl border bg-white">
         <div className="border-b px-5 py-4">
           <h3 className="font-semibold">Órdenes registradas</h3>
@@ -564,14 +597,14 @@ export function WorkOrdersPage() {
                         </details>
                       )}
                     </td>
-                    <td className="px-4 py-3">{order.status}</td>
+                    <td className="px-4 py-3">{order.status}{order.releasedTo && <><br /><span className="text-xs text-slate-500">Entregado a {order.releasedTo}</span></>}</td>
                     <td className="whitespace-nowrap px-4 py-3">
                       <button className="mr-3 text-blue-700 hover:underline" onClick={() => void showPreview(order)}>Costos</button>
                       {order.status !== 'CLOSED' && order.status !== 'CANCELED' && (
                         <>
                           <button className="mr-3 text-slate-700 hover:underline" onClick={() => setSelectedOrder(order)}>Agregar trabajo</button>
                           {order.operations.length > 0 ? (
-                            <button className="text-green-700 hover:underline" onClick={() => void closeOrder(order)}>Cerrar</button>
+                            <button className="text-green-700 hover:underline" onClick={() => { setReleaseForm({ releasedTo: order.deliveredBy, deliveryNotes: '' }); setClosingOrder(order); }}>Registrar salida</button>
                           ) : (
                             <span className="text-xs text-slate-400">Agrega trabajo para cerrar</span>
                           )}

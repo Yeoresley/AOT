@@ -1,11 +1,13 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import {
+  ClientDto,
   InventoryItemDto,
   InventoryMovementDto,
   MachineToolDto,
   OperationCatalogDto,
   OperatorDto,
+  VehicleDto,
   WarehouseDto,
 } from './catalogs.dto';
 import { CatalogsService } from './catalogs.service';
@@ -18,6 +20,16 @@ export class CatalogsController {
   @Get()
   list() {
     return this.catalogs.list();
+  }
+
+  @Post('clients')
+  createClient(@Body() dto: ClientDto) {
+    return this.catalogs.createClient(dto);
+  }
+
+  @Post('vehicles')
+  createVehicle(@Body() dto: VehicleDto) {
+    return this.catalogs.createVehicle(dto);
   }
 
   @Post('operators')

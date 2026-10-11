@@ -25,14 +25,31 @@ interface Operation {
   defaultHours: number | string | null;
 }
 
+interface Client {
+  id: string;
+  name: string;
+  marginUsdPct: number | string;
+  marginCupPct: number | string;
+}
+
+interface Vehicle {
+  id: string;
+  plate: string;
+  brand: string;
+  model: string;
+  year: number | null;
+}
+
 interface CatalogData {
+  clients: Client[];
+  vehicles: Vehicle[];
   operators: Operator[];
   machineTools: MachineTool[];
   operations: Operation[];
 }
 
 const fieldClass = 'w-full rounded-lg border border-slate-300 px-3 py-2';
-const emptyData: CatalogData = { operators: [], machineTools: [], operations: [] };
+const emptyData: CatalogData = { clients: [], vehicles: [], operators: [], machineTools: [], operations: [] };
 
 export function CatalogsPage() {
   const [data, setData] = useState<CatalogData>(emptyData);
@@ -51,6 +68,8 @@ export function CatalogsPage() {
     isAft: true,
   });
   const [operation, setOperation] = useState({ description: '', defaultHours: '' });
+  const [client, setClient] = useState({ name: '', marginUsdPct: '', marginCupPct: '' });
+  const [vehicle, setVehicle] = useState({ plate: '', brand: '', model: '', year: '', vin: '' });
 
   async function reload() {
     const { data: catalogs } = await http.get<CatalogData>('/catalogs');
@@ -107,6 +126,66 @@ export function CatalogsPage() {
         <p className="mt-1 text-sm text-slate-600">Configura estos datos una vez; después se seleccionan al registrar cada trabajo.</p>
       </header>
       {error && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+
+      <section className="grid gap-6 xl:grid-cols-2">
+        <section className="rounded-xl border bg-white p-5">
+          <h3 className="text-lg font-semibold">Clientes y márgenes</h3>
+          <p className="mt-1 text-sm text-slate-500">El margen se aplica al costo final de las órdenes de este cliente, por separado para cada moneda.</p>
+          <form onSubmit={(event) => void submit(event, 'clients', {
+            name: client.name,
+            marginUsdPct: Number(client.marginUsdPct),
+            marginCupPct: Number(client.marginCupPct),
+          }, null, () => setClient({ name: '', marginUsdPct: '', marginCupPct: '' }))} className="mt-4 grid gap-3 sm:grid-cols-2">
+            <label className="text-sm font-medium sm:col-span-2">Nombre del cliente
+              <input required value={client.name} onChange={(event) => setClient({ ...client, name: event.target.value })} className={`${fieldClass} mt-1 font-normal`} />
+            </label>
+            <label className="text-sm font-medium">Margen USD (%)
+              <input required type="number" min="0" max="100" step="0.01" value={client.marginUsdPct} onChange={(event) => setClient({ ...client, marginUsdPct: event.target.value })} className={`${fieldClass} mt-1 font-normal`} />
+            </label>
+            <label className="text-sm font-medium">Margen CUP (%)
+              <input required type="number" min="0" max="100" step="0.01" value={client.marginCupPct} onChange={(event) => setClient({ ...client, marginCupPct: event.target.value })} className={`${fieldClass} mt-1 font-normal`} />
+            </label>
+            <button disabled={saving} className="rounded-lg bg-slate-900 px-4 py-2 text-white sm:col-span-2">{saving ? 'Guardando...' : 'Agregar cliente'}</button>
+          </form>
+          <div className="mt-4 divide-y text-sm">
+            {data.clients.map((item) => <div key={item.id} className="flex flex-wrap justify-between gap-2 py-2"><span>{item.name}</span><span className="text-slate-500">Margen USD {item.marginUsdPct}% · CUP {item.marginCupPct}%</span></div>)}
+            {!loading && !data.clients.length && <p className="py-3 text-slate-500">No hay clientes registrados.</p>}
+          </div>
+        </section>
+
+        <section className="rounded-xl border bg-white p-5">
+          <h3 className="text-lg font-semibold">Vehículos</h3>
+          <p className="mt-1 text-sm text-slate-500">Registra cada vehículo por su matrícula; luego estará disponible al recibirlo y crear la orden.</p>
+          <form onSubmit={(event) => void submit(event, 'vehicles', {
+            plate: vehicle.plate.trim().toUpperCase(),
+            brand: vehicle.brand,
+            model: vehicle.model,
+            ...(vehicle.year ? { year: Number(vehicle.year) } : {}),
+            ...(vehicle.vin ? { vin: vehicle.vin } : {}),
+          }, null, () => setVehicle({ plate: '', brand: '', model: '', year: '', vin: '' }))} className="mt-4 grid gap-3 sm:grid-cols-2">
+            <label className="text-sm font-medium">Matrícula
+              <input required value={vehicle.plate} onChange={(event) => setVehicle({ ...vehicle, plate: event.target.value })} className={`${fieldClass} mt-1 font-normal`} />
+            </label>
+            <label className="text-sm font-medium">Marca
+              <input required value={vehicle.brand} onChange={(event) => setVehicle({ ...vehicle, brand: event.target.value })} className={`${fieldClass} mt-1 font-normal`} />
+            </label>
+            <label className="text-sm font-medium">Modelo
+              <input required value={vehicle.model} onChange={(event) => setVehicle({ ...vehicle, model: event.target.value })} className={`${fieldClass} mt-1 font-normal`} />
+            </label>
+            <label className="text-sm font-medium">Año (opcional)
+              <input type="number" min="1900" max="2200" value={vehicle.year} onChange={(event) => setVehicle({ ...vehicle, year: event.target.value })} className={`${fieldClass} mt-1 font-normal`} />
+            </label>
+            <label className="text-sm font-medium sm:col-span-2">VIN (opcional)
+              <input value={vehicle.vin} onChange={(event) => setVehicle({ ...vehicle, vin: event.target.value })} className={`${fieldClass} mt-1 font-normal`} />
+            </label>
+            <button disabled={saving} className="rounded-lg bg-slate-900 px-4 py-2 text-white sm:col-span-2">{saving ? 'Guardando...' : 'Agregar vehículo'}</button>
+          </form>
+          <div className="mt-4 divide-y text-sm">
+            {data.vehicles.map((item) => <div key={item.id} className="flex justify-between gap-2 py-2"><span className="font-medium">{item.plate} · {item.brand} {item.model}</span><span className="text-slate-500">{item.year ?? ''}</span></div>)}
+            {!loading && !data.vehicles.length && <p className="py-3 text-slate-500">No hay vehículos registrados.</p>}
+          </div>
+        </section>
+      </section>
 
       <section className="rounded-xl border bg-white p-5">
         <h3 className="text-lg font-semibold">Trabajadores y salarios por hora</h3>

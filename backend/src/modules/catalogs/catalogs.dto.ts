@@ -1,5 +1,48 @@
 import { Type } from 'class-transformer';
-import { IsBoolean, IsNotEmpty, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsBoolean, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
+
+export class ClientDto {
+  @IsString()
+  @IsNotEmpty()
+  name!: string;
+
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 4 })
+  @Min(0)
+  @Max(100)
+  marginUsdPct!: number;
+
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 4 })
+  @Min(0)
+  @Max(100)
+  marginCupPct!: number;
+}
+
+export class VehicleDto {
+  @IsString()
+  @IsNotEmpty()
+  plate!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  brand!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  model!: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1900)
+  @Max(2200)
+  year?: number;
+
+  @IsOptional()
+  @IsString()
+  vin?: string;
+}
 
 export class OperatorDto {
   @IsOptional()

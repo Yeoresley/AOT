@@ -34,3 +34,5 @@ npm run seed
 El backend genera el cliente Prisma desde `../prisma/schema.prisma`. Para el servidor configura las variables de entorno, ejecuta `npm run prisma:deploy` desde `backend` y compila las aplicaciones; no copies `.env` ni `node_modules`.
 
 Las herramientas y AFT calculan el desgaste por hora con una base de 192 horas mensuales (2 304 horas anuales): valor × depreciación anual ÷ 2 304. El inventario se controla por almacén; los ajustes de conteo físico aceptan saldo cero. La importación de datos de Versat requiere mapear primero una exportación de ejemplo.
+
+El flujo principal permite recibir el vehículo y abrir la OT, registrar trabajos y recursos, documentar a quién se entrega al cierre, emitir una factura en USD y otra en CUP, y registrar cobros parciales o totales por separado. Los números de factura que genera la aplicación son identificadores internos; antes de producción deben ajustarse a la numeración y requisitos fiscales aplicables.

@@ -185,6 +185,8 @@ model WorkOrder {
   vehicleConditionNotes String
   visibleIncidents      String
   initialTraceability   String
+  releasedTo            String?
+  deliveryNotes         String?
   cancellationReason    String?
   operations            WorkOrderOperation[]
   consumables           ConsumableEntry[]
@@ -431,6 +433,7 @@ model Invoice {
   id              String           @id @default(cuid())
   invoiceNumber   String           @unique
   workOrderId     String
+  currency        Currency         @default(USD)
   issueDate       DateTime
   dueDate         DateTime?
   status          String
@@ -441,6 +444,8 @@ model Invoice {
   workOrder       WorkOrder        @relation(fields: [workOrderId], references: [id])
   receivableItems ReceivableItem[]
   createdAt       DateTime         @default(now())
+
+  @@unique([workOrderId, currency])
 }
 
 model ReceivableItem {
@@ -453,7 +458,22 @@ model ReceivableItem {
   paidCup   Decimal  @db.Decimal(14, 4)
   status    String
   invoice   Invoice  @relation(fields: [invoiceId], references: [id])
+  payments  ReceivablePayment[]
   createdAt DateTime @default(now())
+}
+
+model ReceivablePayment {
+  id                String   @id @default(cuid())
+  receivableItemId  String
+  currency          Currency
+  amount            Decimal  @db.Decimal(14, 4)
+  paymentMethod     String
+  reference         String?
+  receivedBy        String
+  receivedAt        DateTime @default(now())
+  receivableItem    ReceivableItem @relation(fields: [receivableItemId], references: [id])
+
+  @@index([receivableItemId, receivedAt])
 }
 
 model ApprovalFlow {
