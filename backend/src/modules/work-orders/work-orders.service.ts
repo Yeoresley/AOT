@@ -4,18 +4,19 @@ import {
   WorkOrderOperationWorker,
   WorkOrderOperationTool,
   OutsourcedServiceEntry,
+  Prisma,
 } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { CreateWorkOrderDto } from './dto/create-work-order.dto';
+import { AddWorkOrderOperationDto } from './dto/add-work-order-operation.dto';
+import { CloseWorkOrderDto } from './dto/close-work-order.dto';
 import { WorkOrderCostingService } from './services/work-order-costing.service';
-import { PlatformEventsService } from '../platform-events/platform-events.service';
 
 @Injectable()
 export class WorkOrdersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly costingService: WorkOrderCostingService,
-    private readonly platformEvents: PlatformEventsService,
   ) {}
 
   async create(dto: CreateWorkOrderDto) {
@@ -33,7 +34,229 @@ export class WorkOrdersService {
   }
 
   async findAll() {
-    return this.prisma.workOrder.findMany({ include: { client: true, vehicle: true, establishment: true } });
+    return this.prisma.workOrder.findMany({
+      where: { deletedAt: null },
+      include: {
+        client: true,
+        vehicle: true,
+        establishment: true,
+        costSummary: true,
+        operations: {
+          include: {
+            workers: { include: { operator: { select: { fullName: true } } } },
+            tools: { include: { machineTool: { select: { description: true } } } },
+            consumables: true,
+            outsourcedServices: true,
+          },
+        },
+      },
+      orderBy: { receivedAt: 'desc' },
+    });
+  }
+
+  async getFormOptions() {
+    const [clients, vehicles, establishments, operations, operators, tools, stockItems] = await Promise.all([
+      this.prisma.client.findMany({
+        where: { deletedAt: null },
+        select: { id: true, name: true },
+        orderBy: { name: 'asc' },
+      }),
+      this.prisma.vehicle.findMany({
+        select: { id: true, plate: true, brand: true, model: true },
+        orderBy: { plate: 'asc' },
+      }),
+      this.prisma.establishment.findMany({
+        where: { deletedAt: null },
+        select: { id: true, name: true },
+        orderBy: { name: 'asc' },
+      }),
+      this.prisma.operationCatalog.findMany({
+        where: { deletedAt: null },
+        select: { id: true, description: true, defaultHours: true },
+        orderBy: { description: 'asc' },
+      }),
+      this.prisma.operator.findMany({
+        where: { deletedAt: null },
+        select: { id: true, fullName: true },
+        orderBy: { fullName: 'asc' },
+      }),
+      this.prisma.machineTool.findMany({
+        where: { deletedAt: null },
+        select: { id: true, description: true },
+        orderBy: { description: 'asc' },
+      }),
+      this.prisma.inventoryStock.findMany({
+        where: { inventoryItem: { deletedAt: null }, warehouse: { deletedAt: null } },
+        include: {
+          inventoryItem: { select: { id: true, sku: true, description: true, unitMeasure: true } },
+          warehouse: { select: { id: true, code: true, name: true } },
+        },
+        orderBy: { inventoryItem: { description: 'asc' } },
+      }),
+    ]);
+    return { clients, vehicles, establishments, operations, operators, tools, stockItems };
+  }
+
+  async addOperation(workOrderId: string, dto: AddWorkOrderOperationDto) {
+    const workOrder = await this.prisma.workOrder.findUnique({
+      where: { id: workOrderId },
+      select: { id: true, status: true },
+    });
+    if (!workOrder) throw new NotFoundException('Orden no encontrada');
+    if (workOrder.status === WorkOrderStatus.CLOSED || workOrder.status === WorkOrderStatus.CANCELED) {
+      throw new BadRequestException('No se pueden agregar operaciones a una orden cerrada o cancelada');
+    }
+
+    const workersDto = dto.workers ?? [];
+    const toolsDto = dto.tools ?? [];
+    const consumablesDto = dto.consumables ?? [];
+    const outsourcedDto = dto.outsourcedServices ?? [];
+    if (!workersDto.length && !toolsDto.length && !consumablesDto.length && !outsourcedDto.length) {
+      throw new BadRequestException('Registra al menos un mecánico, herramienta, insumo o servicio externo');
+    }
+
+    const [catalog, operators, tools] = await Promise.all([
+      this.prisma.operationCatalog.findFirst({
+        where: { id: dto.operationCatalogId, deletedAt: null },
+        select: { description: true },
+      }),
+      this.prisma.operator.findMany({
+        where: { id: { in: workersDto.map((worker) => worker.operatorId) }, deletedAt: null },
+        select: { id: true, salaryUsdPerHour: true, salaryCupPerHour: true },
+      }),
+      this.prisma.machineTool.findMany({
+        where: { id: { in: toolsDto.map((tool) => tool.machineToolId) }, deletedAt: null },
+        select: { id: true, thdUsd: true, thdCup: true },
+      }),
+    ]);
+
+    if (!catalog) throw new NotFoundException('Operación no encontrada en el catálogo');
+    if (operators.length !== new Set(workersDto.map((worker) => worker.operatorId)).size) {
+      throw new NotFoundException('Uno o más mecánicos no existen o están inactivos');
+    }
+    if (tools.length !== new Set(toolsDto.map((tool) => tool.machineToolId)).size) {
+      throw new NotFoundException('Una o más herramientas no existen o están inactivas');
+    }
+
+    const laborHours = workersDto.reduce((total, worker) => total + worker.hours, 0);
+    for (const consumable of consumablesDto) {
+      if (
+        !consumable.inventoryStockId &&
+        (!consumable.item?.trim() ||
+          !consumable.unitMeasure?.trim() ||
+          consumable.costUsd === undefined ||
+          consumable.costCup === undefined)
+      ) {
+        throw new BadRequestException('Selecciona un insumo del almacén o completa descripción, unidad y ambos costos');
+      }
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const savedConsumables: Prisma.ConsumableEntryCreateWithoutOperationInput[] = [];
+      for (const consumable of consumablesDto) {
+        if (!consumable.inventoryStockId) {
+          savedConsumables.push({
+            date: new Date(dto.operationDate),
+            voucherNumber: consumable.voucherNumber?.trim() || 'SIN-COMPROBANTE',
+            item: consumable.item!.trim(),
+            unitMeasure: consumable.unitMeasure!.trim(),
+            quantity: consumable.quantity,
+            costUsd: consumable.costUsd!,
+            costCup: consumable.costCup!,
+            workOrder: { connect: { id: workOrderId } },
+          });
+          continue;
+        }
+
+        const stock = await tx.inventoryStock.findUnique({
+          where: { id: consumable.inventoryStockId },
+          include: { inventoryItem: true },
+        });
+        if (!stock || stock.inventoryItem.deletedAt) throw new NotFoundException('Insumo de almacén no encontrado');
+        const decrement = await tx.inventoryStock.updateMany({
+          where: { id: stock.id, stockOnHand: { gte: consumable.quantity } },
+          data: { stockOnHand: { decrement: consumable.quantity } },
+        });
+        if (decrement.count !== 1) {
+          throw new BadRequestException(`Existencias insuficientes de ${stock.inventoryItem.description}`);
+        }
+        const unitCostUsd = Number(stock.averageCostUsd);
+        const unitCostCup = Number(stock.averageCostCup);
+        await tx.inventoryMovement.create({
+          data: {
+            inventoryItemId: stock.inventoryItemId,
+            warehouseId: stock.warehouseId,
+            type: 'OUT',
+            quantity: consumable.quantity,
+            unitCostUsd,
+            unitCostCup,
+            reference: `OT ${workOrderId}`,
+            notes: `Consumo en operación ${catalog.description}`,
+          },
+        });
+        savedConsumables.push({
+          date: new Date(dto.operationDate),
+          voucherNumber: consumable.voucherNumber?.trim() || 'SALIDA-OT',
+          item: stock.inventoryItem.description,
+          unitMeasure: stock.inventoryItem.unitMeasure,
+          quantity: consumable.quantity,
+          costUsd: consumable.quantity * unitCostUsd,
+          costCup: consumable.quantity * unitCostCup,
+          inventoryStock: { connect: { id: stock.id } },
+          workOrder: { connect: { id: workOrderId } },
+        });
+      }
+
+      return tx.workOrderOperation.create({
+        data: {
+          workOrderId,
+          operationCatalogId: dto.operationCatalogId,
+          description: catalog.description,
+          operationDate: new Date(dto.operationDate),
+          hours: dto.hours ?? laborHours,
+          notes: dto.notes,
+          workers: {
+            create: workersDto.map((worker) => {
+              const operator = operators.find((item) => item.id === worker.operatorId)!;
+              return {
+                operatorId: operator.id,
+                salaryUsdPerHour: operator.salaryUsdPerHour,
+                salaryCupPerHour: operator.salaryCupPerHour,
+                hours: worker.hours,
+              };
+            }),
+          },
+          tools: {
+            create: toolsDto.map((tool) => {
+              const machineTool = tools.find((item) => item.id === tool.machineToolId)!;
+              return {
+                machineToolId: machineTool.id,
+                thdUsdApplied: machineTool.thdUsd,
+                thdCupApplied: machineTool.thdCup,
+                hours: tool.hours,
+              };
+            }),
+          },
+          consumables: { create: savedConsumables },
+          outsourcedServices: {
+            create: outsourcedDto.map((service) => ({
+              description: service.description,
+              provider: service.provider,
+              date: new Date(dto.operationDate),
+              costUsd: service.costUsd,
+              costCup: service.costCup,
+              workOrder: { connect: { id: workOrderId } },
+            })),
+          },
+        },
+        include: {
+          workers: { include: { operator: { select: { fullName: true } } } },
+          tools: { include: { machineTool: { select: { description: true } } } },
+          consumables: true,
+          outsourcedServices: true,
+        },
+      });
+    });
   }
 
   async calculatePreview(workOrderId: string) {
@@ -114,17 +337,29 @@ export class WorkOrdersService {
     });
   }
 
-  async close(workOrderId: string, closedBy: string) {
-    const workOrder = await this.prisma.workOrder.findUnique({ where: { id: workOrderId } });
+  async close(workOrderId: string, closedBy: string, dto: CloseWorkOrderDto) {
+    const workOrder = await this.prisma.workOrder.findUnique({
+      where: { id: workOrderId },
+      select: { id: true, status: true, _count: { select: { operations: true } } },
+    });
     if (!workOrder) throw new NotFoundException('Orden no encontrada');
     if (workOrder.status === WorkOrderStatus.CLOSED) throw new BadRequestException('Orden ya cerrada');
+    if (workOrder.status === WorkOrderStatus.CANCELED) throw new BadRequestException('No se puede cerrar una orden cancelada');
+    if (workOrder._count.operations === 0) {
+      throw new BadRequestException('Agrega al menos un trabajo realizado antes de cerrar la orden');
+    }
 
     const totals = await this.calculatePreview(workOrderId);
 
     await this.prisma.$transaction([
       this.prisma.workOrder.update({
         where: { id: workOrderId },
-        data: { status: WorkOrderStatus.CLOSED, closedAt: new Date() },
+        data: {
+          status: WorkOrderStatus.CLOSED,
+          closedAt: new Date(),
+          releasedTo: dto.releasedTo.trim(),
+          deliveryNotes: dto.deliveryNotes?.trim() || null,
+        },
       }),
       this.prisma.workOrderStatusHistory.create({
         data: {
@@ -139,9 +374,15 @@ export class WorkOrdersService {
         create: { workOrderId, ...totals },
         update: { ...totals },
       }),
+      this.prisma.domainEventOutbox.create({
+        data: {
+          eventType: 'WORK_ORDER_CLOSED',
+          aggregateType: 'work_order',
+          aggregateId: workOrderId,
+          payload: { totals: { ...totals }, closedBy },
+        },
+      }),
     ]);
-
-    await this.platformEvents.publish('WORK_ORDER_CLOSED', 'work_order', workOrderId, { totals, closedBy });
 
     return { status: 'closed', totals };
   }

@@ -11,6 +11,7 @@ import { ReceivablesModule } from './receivables/receivables.module';
 import { ApprovalsModule } from './approvals/approvals.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { ExternalPortalModule } from './external-portal/external-portal.module';
+import { CatalogsModule } from './catalogs/catalogs.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { ExternalPortalModule } from './external-portal/external-portal.module';
     ApprovalsModule,
     AnalyticsModule,
     ExternalPortalModule,
+    CatalogsModule,
   ],
 })
 export class AppModule {}

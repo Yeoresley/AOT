@@ -2,12 +2,15 @@ import { IsDateString, IsNotEmpty, IsString } from 'class-validator';
 
 export class CreateWorkOrderDto {
   @IsString()
+  @IsNotEmpty()
   establishmentId!: string;
 
   @IsString()
+  @IsNotEmpty()
   clientId!: string;
 
   @IsString()
+  @IsNotEmpty()
   vehicleId!: string;
 
   @IsString()
@@ -22,6 +25,7 @@ export class CreateWorkOrderDto {
   receivedAt!: string;
 
   @IsString()
+  @IsNotEmpty()
   requestedActivity!: string;
 
   @IsString()

@@ -1,8 +1,12 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { CreateWorkOrderDto } from './dto/create-work-order.dto';
+import { AddWorkOrderOperationDto } from './dto/add-work-order-operation.dto';
+import { CloseWorkOrderDto } from './dto/close-work-order.dto';
 import { WorkOrdersService } from './work-orders.service';
+import { AuthenticatedRequest, JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('work-orders')
+@UseGuards(JwtAuthGuard)
 export class WorkOrdersController {
   constructor(private readonly service: WorkOrdersService) {}
 
@@ -16,13 +20,23 @@ export class WorkOrdersController {
     return this.service.findAll();
   }
 
+  @Get('options')
+  getFormOptions() {
+    return this.service.getFormOptions();
+  }
+
+  @Post(':id/operations')
+  addOperation(@Param('id') id: string, @Body() dto: AddWorkOrderOperationDto) {
+    return this.service.addOperation(id, dto);
+  }
+
   @Post(':id/calculate-preview')
   calculatePreview(@Param('id') id: string) {
     return this.service.calculatePreview(id);
   }
 
   @Post(':id/close')
-  close(@Param('id') id: string, @Body() body: { closedBy: string }) {
-    return this.service.close(id, body.closedBy);
+  close(@Param('id') id: string, @Body() dto: CloseWorkOrderDto, @Req() request: AuthenticatedRequest) {
+    return this.service.close(id, request.user.username, dto);
   }
 }

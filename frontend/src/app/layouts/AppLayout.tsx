@@ -1,9 +1,10 @@
-import { Link, Outlet } from 'react-router-dom';
+import { Link, Outlet, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../shared/auth/AuthContext';
 
 const menu = [
   { to: '/', label: 'Dashboard' },
   { to: '/work-orders', label: 'Órdenes' },
-  { to: '/masters/clients', label: 'Clientes' },
+  { to: '/catalogs', label: 'Catálogos' },
   { to: '/inventory', label: 'Inventario' },
   { to: '/purchasing', label: 'Compras' },
   { to: '/billing', label: 'Facturación' },
@@ -15,6 +16,14 @@ const menu = [
 ];
 
 export function AppLayout() {
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+
+  async function handleLogout() {
+    await signOut();
+    navigate('/login', { replace: true });
+  }
+
   return (
     <div className="min-h-screen grid grid-cols-[280px_1fr]">
       <aside className="bg-slate-900 text-white p-4 overflow-auto">
@@ -30,7 +39,10 @@ export function AppLayout() {
       <main>
         <header className="bg-white border-b px-6 py-3 flex justify-between">
           <span className="font-semibold">Gestión Taller Automotriz</span>
-          <button className="text-sm text-slate-500">Salir</button>
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-slate-500">{user?.fullName}</span>
+            <button className="text-sm text-slate-500 hover:text-slate-900" onClick={handleLogout}>Salir</button>
+          </div>
         </header>
         <div className="p-6">
           <Outlet />

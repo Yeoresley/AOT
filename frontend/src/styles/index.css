@@ -5,3 +5,26 @@
 body {
   @apply bg-slate-50 text-slate-900;
 }
+
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+
+  .invoice-print,
+  .invoice-print * {
+    visibility: visible !important;
+  }
+
+  .invoice-print {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+    max-width: none !important;
+    border: 0 !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+}
